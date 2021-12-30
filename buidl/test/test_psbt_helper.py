@@ -131,7 +131,7 @@ class P2SHTest(TestCase):
 
             self.assertEqual(psbt_obj.final_tx().hash().hex(), signed_tx_hash_hex)
 
-    def test_sweep_1of2_p2sh_with_non_BIP67_input(self):
+    def test_sweep_1of2_p2sh_with_non_BIP67_inputs(self):
 
         # This test will produce a validly signed TX for the 1-of-2 p2sh using either key, which will result in a different TX ID
         # d8172be9981a4f57e6e4ebe0f4785f5f2035aee40ffbb2d6f1200810a879d490 is the one that was broadcast to the testnet blockchain:
@@ -358,6 +358,147 @@ class P2SHTest(TestCase):
         # We don't bother altering 838f3ff9's path as well because changing anything will already throw this error
         modified_kwargs = deepcopy(kwargs)
         modified_kwargs["output_dicts"][0]["path_dict"]["e0c595c5"] = "m/999"
+        with self.assertRaises(ValueError) as cm:
+            create_multisig_psbt(**modified_kwargs, script_type="p2sh")
+        self.assertEqual(
+            "xfp_hex e0c595c5 with m/999 for in/output #0 not supplied in xpub_dict",
+            str(cm.exception),
+        )
+
+    def test_spend_1of2_with_change_with_non_BIP67_outputs(self):
+
+        kwargs = {
+            # this part is unchanged from the previous
+            "public_key_records": [
+                # action x12
+                [
+                    "e0c595c5",
+                    "tpubDBnspiLZfrq1V7j1iuMxGiPsuHyy6e4QBnADwRrbH89AcnsUEMfWiAYXmSbMuNFsrMdnbQRDGGSM1AFGL6zUWNVSmwRavoJzdQBbZKLgLgd",
+                    "m/45'/0",
+                ],
+                # agent x12
+                [
+                    "838f3ff9",
+                    "tpubDAKJicb9Tkw34PFLEBUcbnH99twN3augmg7oYHHx9Aa9iodXmA4wtGEJr8h2XjJYqn2j1v5qHLjpWEe8aPihmC6jmsgomsuc9Zeh4ZushNk",
+                    "m/45'/0",
+                ],
+            ],
+            # this part is changed:
+            "input_dicts": [
+                {
+                    "quorum_m": 1,
+                    "path_dict": {
+                        # xfp: root_path
+                        "e0c595c5": "m/45'/0/0/1",
+                        "838f3ff9": "m/45'/0/0/1",
+                    },
+                    "prev_tx_dict": {
+                        "hex": "020000000001012c40a6810f7a670913d171e1f5b203ca01ed45ed3bf68b649850491eecb560080100000000feffffff02a7e50941010000001600147b3af2253632c3000f9cdd531747107fe249c7d1102700000000000017a91459fb638aaa55a7119a09faf5e8b2ce8a879cce338702473044022004666d885310990e1b0a61e93b1490acb172d43200d6fcfa22e89905b7f3094d02204a705e4a4fc8cab97f7d146f481e70718ee4567486796536d14c7808be3fd866012102cc3b01d2192b5275d3fda7f82eaf593dfb8ca9333f7296f93da401f8d1821335619f1e00",
+                        "hash_hex": "3bbc91c1de188528d254ed145b1aabbb68b9050f7c660b345fc9feba73ff94a2",
+                        "output_idx": 1,
+                        "output_sats": 10000,
+                    },
+                },
+            ],
+            "output_dicts": [
+                {
+                    # this should be change:
+                    "sats": 1000,
+                    "address": "2MzQhXqN93igSKGW9CMvkpZ9TYowWgiNEF8",
+                    "quorum_m": 1,
+                    "path_list": [
+                        # (xfp, root_path) (m/.../1/*/{idx} is change addr branch)
+                        ("e0c595c5", "m/45'/0/1/0"),
+                        ("838f3ff9", "m/45'/0/1/0"),
+                    ],
+                },
+                {
+                    # testnet faucet:
+                    "sats": 5000,
+                    "address": "tb1ql7w62elx9ucw4pj5lgw4l028hmuw80sndtntxt",
+                },
+            ],
+            "fee_sats": 4000,
+        }
+
+        expected_unsigned_psbt_b64 = "cHNidP8BAHIBAAAAAaKU/3O6/slfNAtmfA8FuWi7qxpbFO1U0iiFGN7Bkbw7AQAAAAD/////AugDAAAAAAAAF6kUTpOd3+VnlxaS0ZVZ8fktT65aoFaHiBMAAAAAAAAWABT/naVn5i8w6oZU+h1fvUe++OO+EwAAAABPAQQ1h88CF475zgAAAAAuMPm6dNx6/NwppaWSD/7GhT4UPlsn6KW0NrZYTVtOeAJ9I53eSRJwDV7g4Yzcwn86qD6fEQeXC5XtgEK6hPvjlgyDjz/5LQAAgAAAAABPAQQ1h88C4EhWVQAAAAAeelY9aAGd9a7a3O/1SPCzbumzSE4EcxBtmWlDpzmbgwM3j99+dzd6N9WWqQSAbu2U9fhpNL3al9TksC8YNBAoegzgxZXFLQAAgAAAAAAAAQDfAgAAAAABASxApoEPemcJE9Fx4fWyA8oB7UXtO/aLZJhQSR7stWAIAQAAAAD+////AqflCUEBAAAAFgAUezryJTYywwAPnN1TF0cQf+JJx9EQJwAAAAAAABepFFn7Y4qqVacRmgn69eiyzoqHnM4zhwJHMEQCIARmbYhTEJkOGwph6TsUkKyxctQyANb8+iLomQW38wlNAiBKcF5KT8jKuX99FG9IHnBxjuRWdIZ5ZTbRTHgIvj/YZgEhAsw7AdIZK1J10/2n+C6vWT37jKkzP3KW+T2kAfjRghM1YZ8eAAEER1EhAiblPHq2FdpGg2TKn1mHn1G9lCeMJqOcrFmiNafPgUWTIQLSIeF7uAzxMLsJMUNK+sXlXzd+2bKwA1GaUpzgKGJER1KuIgYCJuU8erYV2kaDZMqfWYefUb2UJ4wmo5ysWaI1p8+BRZMUg48/+S0AAIAAAAAAAAAAAAEAAAAiBgLSIeF7uAzxMLsJMUNK+sXlXzd+2bKwA1GaUpzgKGJERxTgxZXFLQAAgAAAAAAAAAAAAQAAAAABAEdRIQJ3tPielqw9CAqDy+Tn23vo4cUxiYYGk/KWtw5ryOPJ3yEC1WIbkoA7VEDNWw0VmAntyxp6EY5IfZ7sbF1PNJklWFFSriICAne0+J6WrD0ICoPL5Ofbe+jhxTGJhgaT8pa3DmvI48nfFODFlcUtAACAAAAAAAEAAAAAAAAAIgIC1WIbkoA7VEDNWw0VmAntyxp6EY5IfZ7sbF1PNJklWFEUg48/+S0AAIAAAAAAAQAAAAAAAAAAAA=="
+
+        # With p2sh, txid changes depending on which key signs
+        tests = (
+            # (seed_word repeated x12, signed_tx_hash_hex),
+            (
+                # this one we did not broadcast
+                "action ",
+                "0eefb9c614abff0fe859c2dd524a5cfc9582389c9ec938c02f2afb36c64a8e69",
+            ),
+            (
+                # this is the one we did broadcast
+                # https://blockstream.info/testnet/tx/5b7f81bbef354a48097d429cc6e5b7aad1a1b6940faa4aba284a8913fff643dc
+                "agent ",
+                "5b7f81bbef354a48097d429cc6e5b7aad1a1b6940faa4aba284a8913fff643dc",
+            ),
+        )
+
+        # Now we prove we can sign this with either key
+        for seed_word, signed_tx_hash_hex in tests:
+            psbt_obj = create_multisig_psbt(**kwargs, script_type="p2sh")
+            self.assertEqual(len(psbt_obj.hd_pubs), 2)
+            self.assertEqual(psbt_obj.serialize_base64(), expected_unsigned_psbt_b64)
+
+            hdpriv = HDPrivateKey.from_mnemonic(seed_word * 12, network="testnet")
+
+            root_path_to_use = None
+            for cnt, psbt_in in enumerate(psbt_obj.psbt_ins):
+
+                self.assertEqual(psbt_in.redeem_script.get_quorum(), (1, 2))
+
+                # For this TX there is only one psbt_in (1 input)
+                for child_pubkey in psbt_in.redeem_script.signing_pubkeys():
+                    named_pubkey = psbt_in.named_pubs[child_pubkey]
+                    if (
+                        named_pubkey.root_fingerprint.hex()
+                        == hdpriv.fingerprint().hex()
+                    ):
+                        root_path_to_use = named_pubkey.root_path
+
+                # In this example, the path is the same regardless of which key we sign with:
+                self.assertEqual(root_path_to_use, "m/45'/0/0/1")
+
+            private_keys = [hdpriv.traverse(root_path_to_use).private_key]
+
+            self.assertTrue(psbt_obj.sign_with_private_keys(private_keys=private_keys))
+
+            psbt_obj.finalize()
+
+            self.assertEqual(psbt_obj.final_tx().hash().hex(), signed_tx_hash_hex)
+
+        # Replace xfps
+        psbt_obj = create_multisig_psbt(**kwargs, script_type="p2sh")
+        with self.assertRaises(ValueError) as cm:
+            # deadbeef  not in psbt
+            psbt_obj.replace_root_xfps({"deadbeef": "00000000"})
+        self.assertEqual(str(cm.exception), "xfp_hex deadbeef not found in psbt")
+
+        psbt_obj.replace_root_xfps({"e0c595c5": "00000000"})
+        self.assertNotEqual(psbt_obj.serialize_base64(), expected_unsigned_psbt_b64)
+
+        # Confirm that swapping out the change address throws an error
+        # nonsense address corresponding to secret exponent = 1
+        modified_kwargs = deepcopy(kwargs)
+        fake_addr = "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx"
+        modified_kwargs["output_dicts"][0]["address"] = fake_addr
+        with self.assertRaises(ValueError) as cm:
+            create_multisig_psbt(**modified_kwargs, script_type="p2sh")
+        self.assertEqual(
+            "Invalid redeem script for output #0. Expecting 2MzQhXqN93igSKGW9CMvkpZ9TYowWgiNEF8 but got tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
+            str(cm.exception),
+        )
+
+        # Confirm that changing the change paths (so that they no longer match the change address) throws an error
+        # Change the path used to validate the change address
+        # We don't bother altering 838f3ff9's path as well because changing anything will already throw this error
+        modified_kwargs = deepcopy(kwargs)
+        modified_kwargs["output_dicts"][0]["path_list"][0]= ("e0c595c5", "m/999")
         with self.assertRaises(ValueError) as cm:
             create_multisig_psbt(**modified_kwargs, script_type="p2sh")
         self.assertEqual(

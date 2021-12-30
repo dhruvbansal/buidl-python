@@ -163,10 +163,20 @@ def create_multisig_psbt(
         )
         tx_outs.append(tx_out)
 
-        if output_dict.get("path_dict"):
+        if output_dict.get("path_dict") or output_dict.get("path_list"):
             # This output claims to be change, so we must validate it here
+
+            if "path_dict" in output_dict:
+                # Standard BIP67 unordered list of pubkeys (will be sorted lexicographically)
+                iterator = output_dict["path_dict"].items()
+                sort_keys = True
+            else:
+                # Caller supplied ordering of pubkeys (will not be sorted)
+                iterator = output_dict["path_list"]
+                sort_keys = False
+
             output_pubkey_hexes = []
-            for xfp_hex, root_path in output_dict["path_dict"].items():
+            for xfp_hex, root_path in iterator:
                 child_hd_pubkey = _safe_get_child_hdpubkey(
                     xfp_dict=xfp_dict,
                     xfp_hex=xfp_hex,
@@ -186,8 +196,7 @@ def create_multisig_psbt(
             redeem_script = RedeemScript.create_p2sh_multisig(
                 quorum_m=output_dict["quorum_m"],
                 pubkey_hexes=output_pubkey_hexes,
-                # We intentionally only allow change addresses to be lexicographically sorted
-                sort_keys=True,
+                sort_keys=sort_keys,
             )
             # Confirm address matches previous ouput
             if redeem_script.address(network=network) != output_dict["address"]:
