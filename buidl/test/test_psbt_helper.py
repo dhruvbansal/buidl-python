@@ -498,7 +498,7 @@ class P2SHTest(TestCase):
         # Change the path used to validate the change address
         # We don't bother altering 838f3ff9's path as well because changing anything will already throw this error
         modified_kwargs = deepcopy(kwargs)
-        modified_kwargs["output_dicts"][0]["path_list"][0]= ("e0c595c5", "m/999")
+        modified_kwargs["output_dicts"][0]["path_list"][0] = ("e0c595c5", "m/999")
         with self.assertRaises(ValueError) as cm:
             create_multisig_psbt(**modified_kwargs, script_type="p2sh")
         self.assertEqual(
